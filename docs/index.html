@@ -1,0 +1,70 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Nifty 50 daily plan</title>
+<style>
+:root{--bg:#f6f7f4;--card:#fff;--ink:#16202a;--mute:#5d6a75;--line:#d9ded8;--bull:#1f7a4d;--neu:#a8700d;--bear:#b3342b;--acc:#1d4e6b;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#10171d;--card:#18222b;--ink:#e8edf0;--mute:#9aa8b3;--line:#2b3943;--bull:#4cc486;--neu:#e0a73e;--bear:#ef7d72;--acc:#7cb7d6}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:720px;margin:0 auto;padding:22px 16px 48px}h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:26px 0 8px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.v{border-left:6px solid var(--c);}.big{font-size:23px;font-weight:700;color:var(--c)}
+.note{color:var(--mute);font-size:13.5px}.wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14.5px}
+td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--mute);font-weight:600}
+input{width:100%;max-width:260px;padding:9px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px}
+.warn{margin-top:10px;padding:9px 12px;border:1px solid var(--neu);border-radius:8px;font-size:14px}
+</style></head><body><main>
+<h1>Nifty 50 daily plan</h1>
+<p class="note" id="asof"></p>
+<div class="card v" id="verdict"></div>
+
+<h2>Market numbers</h2><div class="card wrap" id="nums"></div>
+
+<h2>Your orders</h2>
+<div class="card">
+<label for="cap"><b>Your capital for this strategy (₹)</b></label><br>
+<input id="cap" type="number" inputmode="numeric" placeholder="e.g. 3000000">
+<span class="note"> &nbsp;Stays in your browser only.</span>
+<div id="orders" class="wrap" style="margin-top:10px"></div>
+</div>
+
+<h2>Last 15 days</h2><div class="card wrap" id="hist"></div>
+
+<h2>Rules</h2>
+<div class="card"><ul>
+<li>Place orders after reading this page, for the next market open.</li>
+<li>Roll your put (sell it, buy a new one) when 10 days or fewer remain.</li>
+<li>Use real option prices from your broker. Premium here is a model estimate.</li>
+<li>This page does not trade for you and is not investment advice.</li></ul>
+<p class="note"><a href="backtest.txt">Latest backtest results</a> (if available)</p></div>
+</main>
+<script>
+const P={"date": "2026-10-09", "state": "NEUTRAL", "expo": 0.5, "hedge": 1.0, "p": 0.563694533255664, "horizon": 10, "spot": 22520.44921875, "vix": 14.380000114440918, "ema50": 23431.104762514762, "ma200": 24271.2415234375, "etf": 253.75999450683594, "strike": 21400, "prem": 82.03654334297153, "lot": 75, "dte": 42, "prev": null, "changed": false, "spike": false}, H=[{"date": "2026-10-09", "state": "NEUTRAL", "p": 0.564, "spot": 22520.44921875, "vix": 14.380000114440918}];
+const inr=x=>"₹"+Math.round(x).toLocaleString("en-IN"), $=id=>document.getElementById(id);
+const col={BULL:"var(--bull)",NEUTRAL:"var(--neu)",BEAR:"var(--bear)"}[P.state]||"var(--acc)";
+$("asof").textContent="Based on the close of "+P.date+".";
+$("verdict").style.setProperty("--c",col);
+$("verdict").innerHTML=`<div class="big">${P.state}: ${Math.round(P.expo*100)}% in Nifty ETF, ${Math.round(P.hedge*100)}% of it insured</div>
+<p style="margin:6px 0 0">AI chance of Nifty being higher in ${P.horizon} trading days: <b>${(P.p*100).toFixed(0)}%</b>.${P.changed?" <b>Changed from "+P.prev+".</b>":""}</p>
+${P.spike?'<div class="warn">Big market move today. Review before trading.</div>':""}`;
+$("nums").innerHTML=`<table><tr><td>Nifty 50</td><td>${P.spot.toLocaleString("en-IN")}</td></tr>
+<tr><td>India VIX</td><td>${P.vix.toFixed(1)}</td></tr><tr><td>50-day EMA</td><td>${Math.round(P.ema50).toLocaleString("en-IN")}</td></tr>
+<tr><td>200-day average</td><td>${Math.round(P.ma200).toLocaleString("en-IN")}</td></tr></table>`;
+$("hist").innerHTML="<table><tr><th>Date</th><th>State</th><th>AI chance</th><th>Nifty</th><th>VIX</th></tr>"+
+H.slice().reverse().map(h=>`<tr><td>${h.date}</td><td>${h.state}</td><td>${Math.round(h.p*100)}%</td><td>${Math.round(h.spot).toLocaleString("en-IN")}</td><td>${h.vix.toFixed(1)}</td></tr>`).join("")+"</table>";
+try{const c=localStorage.getItem("cap");if(c)$("cap").value=c;}catch(e){}
+function orders(){
+  const cap=parseFloat($("cap").value);try{localStorage.setItem("cap",$("cap").value);}catch(e){}
+  if(!(cap>0)){$("orders").innerHTML='<p class="note">Enter your capital to see units and lots.</p>';return;}
+  let units=Math.floor(cap*P.expo/P.etf),lots=0,trim=false;
+  if(units>0&&P.hedge>0){lots=Math.round(P.hedge*units*P.etf/(P.lot*P.spot));if(lots===0){units=Math.floor(units*(1-.25*P.hedge));trim=true;}}
+  let t=`<table><tr><td>Hold NIFTYBEES</td><td><b>${units.toLocaleString("en-IN")} units</b> (${inr(units*P.etf)})</td></tr>`;
+  if(lots>0)t+=`<tr><td>Hold Nifty put</td><td><b>${lots} lot(s)</b>, strike <b>${P.strike.toLocaleString("en-IN")}</b>, about ${P.dte} days to expiry</td></tr>
+  <tr><td>Estimated cost</td><td>about ${inr(P.prem*P.lot*lots)} (${P.prem.toFixed(0)} per unit; lot size ${P.lot})</td></tr>`;
+  else if(P.state==="BEAR")t+=`<tr><td>Put</td><td>None. Close any put you hold.</td></tr>`;
+  $("orders").innerHTML=t+"</table>"+(trim?`<div class="warn">Capital is too small for one Nifty lot (about ${inr(P.lot*P.spot)}). ETF was trimmed instead of buying a put.</div>`:"")+
+  `<p class="note">Compare with what you already hold and trade only the difference.</p>`;
+}
+$("cap").addEventListener("input",orders);orders();
+</script></body></html>
