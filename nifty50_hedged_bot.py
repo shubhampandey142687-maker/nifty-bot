@@ -44,7 +44,7 @@ class Config:
     put_otm: float = 0.05        # strike = 95% of spot
     put_dte_buy: int = 42        # buy ~6-week put
     put_roll_dte: int = 10       # roll when <=10 days left
-    lot_size: int = 75           # paper mode only; live mode reads the real lot size from Kite
+    lot_size: int = 65           # NSE Nifty lot size since Jan 2026; live mode reads it from Kite
     # backtest pricing assumptions (Black-Scholes, India VIX as IV)
     r: float = 0.065
     skew: float = 0.10           # OTM put IV = VIX * (1 + skew)

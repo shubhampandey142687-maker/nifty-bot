@@ -4,7 +4,8 @@ Runs once a day in GitHub Actions. Reads Nifty + India VIX, runs the AI/regime m
 nifty50_hedged_bot.py, and writes docs/index.html (your daily plan page) + docs/history.json.
 It NEVER places orders. Telegram is used only if TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID are set.
 """
-import json
+import calendar, json
+from datetime import date as _date, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -33,7 +34,7 @@ input{width:100%;max-width:260px;padding:9px;font:inherit;color:var(--ink);backg
 
 <h2>Market numbers</h2><div class="card wrap" id="nums"></div>
 
-<h2>Your orders</h2>
+<h2>What to do</h2>
 <div class="card">
 <label for="cap"><b>Your capital for this strategy (₹)</b></label><br>
 <input id="cap" type="number" inputmode="numeric" placeholder="e.g. 3000000">
@@ -61,25 +62,55 @@ $("verdict").innerHTML=`<div class="big">${P.state}: ${Math.round(P.expo*100)}% 
 <p style="margin:6px 0 0">AI chance of Nifty being higher in ${P.horizon} trading days: <b>${(P.p*100).toFixed(0)}%</b>.${P.changed?" <b>Changed from "+P.prev+".</b>":""}</p>
 ${P.spike?'<div class="warn">Big market move today. Review before trading.</div>':""}`;
 $("nums").innerHTML=`<table><tr><td>Nifty 50</td><td>${P.spot.toLocaleString("en-IN")}</td></tr>
-<tr><td>India VIX</td><td>${P.vix.toFixed(1)}</td></tr><tr><td>50-day EMA</td><td>${Math.round(P.ema50).toLocaleString("en-IN")}</td></tr>
-<tr><td>200-day average</td><td>${Math.round(P.ma200).toLocaleString("en-IN")}</td></tr></table>`;
+<tr><td>India VIX</td><td>${P.vix.toFixed(1)}</td></tr><tr><td>Trend weak below (50-day EMA)</td><td>${Math.round(P.ema50).toLocaleString("en-IN")}</td></tr>
+<tr><td>Danger zone below (200-day avg)</td><td>${Math.round(P.ma200).toLocaleString("en-IN")}</td></tr></table>`;
 $("hist").innerHTML="<table><tr><th>Date</th><th>State</th><th>AI chance</th><th>Nifty</th><th>VIX</th></tr>"+
 H.slice().reverse().map(h=>`<tr><td>${h.date}</td><td>${h.state}</td><td>${Math.round(h.p*100)}%</td><td>${Math.round(h.spot).toLocaleString("en-IN")}</td><td>${h.vix.toFixed(1)}</td></tr>`).join("")+"</table>";
 try{const c=localStorage.getItem("cap");if(c)$("cap").value=c;}catch(e){}
 function orders(){
   const cap=parseFloat($("cap").value);try{localStorage.setItem("cap",$("cap").value);}catch(e){}
-  if(!(cap>0)){$("orders").innerHTML='<p class="note">Enter your capital to see units and lots.</p>';return;}
-  let units=Math.floor(cap*P.expo/P.etf),lots=0,trim=false;
+  const f=n=>Math.round(n).toLocaleString("en-IN"), have=cap>0;
+  let units=have?Math.floor(cap*P.expo/P.etf):0,lots=0,trim=false;
   if(units>0&&P.hedge>0){lots=Math.round(P.hedge*units*P.etf/(P.lot*P.spot));if(lots===0){units=Math.floor(units*(1-.25*P.hedge));trim=true;}}
-  let t=`<table><tr><td>Hold NIFTYBEES</td><td><b>${units.toLocaleString("en-IN")} units</b> (${inr(units*P.etf)})</td></tr>`;
-  if(lots>0)t+=`<tr><td>Hold Nifty put</td><td><b>${lots} lot(s)</b>, strike <b>${P.strike.toLocaleString("en-IN")}</b>, about ${P.dte} days to expiry</td></tr>
-  <tr><td>Estimated cost</td><td>about ${inr(P.prem*P.lot*lots)} (${P.prem.toFixed(0)} per unit; lot size ${P.lot})</td></tr>`;
-  else if(P.state==="BEAR")t+=`<tr><td>Put</td><td>None. Close any put you hold.</td></tr>`;
-  $("orders").innerHTML=t+"</table>"+(trim?`<div class="warn">Capital is too small for one Nifty lot (about ${inr(P.lot*P.spot)}). ETF was trimmed instead of buying a put.</div>`:"")+
-  `<p class="note">Compare with what you already hold and trade only the difference.</p>`;
+  let t="<table>";
+  if(P.state==="BEAR"){
+    t+=`<tr><td>NIFTYBEES</td><td><b>Do not buy.</b> If you hold any, sell all with a limit price of about <b>₹${P.etf_sell}</b>.</td></tr>
+        <tr><td>Nifty put</td><td>Do not buy. If you hold one, sell it (limit near its market price).</td></tr>`;
+  }else{
+    t+=`<tr><td>1. Buy NIFTYBEES</td><td>Limit price <b>₹${P.etf_limit}</b> (last close ₹${P.etf.toFixed(2)}). Do not pay more.<br>`+
+       (have?`Quantity: <b>${units.toLocaleString("en-IN")} units</b> (about ${inr(units*P.etf)}).`:`Quantity: enter your capital above.`)+`</td></tr>`;
+    if(P.hedge>0&&!(have&&lots===0)){
+      t+=`<tr><td>2. Hedge: buy this Nifty put</td><td><b>${P.put_label}</b><br>Strike <b>${P.strike.toLocaleString("en-IN")}</b>, expires ${P.expiry} (${P.dte} days). `+
+         (have?(lots>0?`Buy <b>${lots} lot${lots>1?"s":""}</b> (1 lot = ${P.lot} units).`:`Skip: capital too small for 1 lot.`):`Lots: enter your capital above.`)+`</td></tr>
+         <tr><td>Expected put price</td><td>about ₹${P.prem.toFixed(0)} per unit`+(lots>0?`, so about <b>${inr(P.prem*P.lot*lots)}</b> for ${lots} lot${lots>1?"s":""}`:"")+`. Check the real price in your broker's option chain.</td></tr>
+         <tr><td>What the hedge does</td><td>If Nifty falls below <b>${P.strike.toLocaleString("en-IN")}</b> (${((1-P.strike/P.spot)*100).toFixed(1)}% under today's ${Math.round(P.spot).toLocaleString("en-IN")}), the put gains and offsets the insured part of your loss. ${Math.round(P.hedge*100)}% of your ETF is insured.</td></tr>`;
+    }
+  }
+  t+=`<tr><td>Watch levels</td><td>Nifty closing under <b>${f(P.ema50)}</b> means the trend is weakening. Under <b>${f(P.ma200)}</b> is the danger zone. The next daily plan will tell you whether to cut.</td></tr></table>`;
+  if(trim)t+=`<div class="warn">Capital is too small for one Nifty put lot (about ${inr(P.lot*P.spot)}). The ETF amount was cut by about ${Math.round(25*P.hedge)}% instead of buying a put.</div>`;
+  t+=`<p class="note">Compare with what you already hold and trade only the difference. Put expiry is the last Tuesday of the month; if that is a holiday, it moves to the day before. Confirm in your broker app.</p>`;
+  $("orders").innerHTML=t;
 }
 $("cap").addEventListener("input",orders);orders();
 </script></body></html>"""
+
+
+def last_tuesday(y, m):
+    day = _date(y, m, calendar.monthrange(y, m)[1])
+    while day.weekday() != 1:
+        day -= timedelta(days=1)
+    return day
+
+
+def pick_expiry(today, target=42, min_days=25):
+    """NSE Nifty monthly options expire on the last Tuesday of the month."""
+    cands = []
+    for k in range(0, 5):
+        y, m = today.year + (today.month - 1 + k) // 12, (today.month - 1 + k) % 12 + 1
+        e = last_tuesday(y, m)
+        if (e - today).days >= min_days:
+            cands.append(e)
+    return min(cands, key=lambda e: abs((e - today).days - target))
 
 
 def main():
@@ -104,7 +135,10 @@ def main():
     except Exception:
         etf = spot / 100
     K = int(round(spot * (1 - cfg.put_otm) / 50) * 50)
-    prem = bot.bs_put(spot, K, cfg.put_dte_buy / 365, cfg.r, v / 100 * (1 + cfg.skew))
+    today = now.date()
+    exp = pick_expiry(today, cfg.put_dte_buy)
+    dte = (exp - today).days
+    prem = bot.bs_put(spot, K, dte / 365, cfg.r, v / 100 * (1 + cfg.skew))
     ret1 = float(df.Close.pct_change().iloc[-1]); vix1 = float(vix.pct_change().iloc[-1])
 
     out = Path("docs"); out.mkdir(exist_ok=True)
@@ -118,7 +152,9 @@ def main():
 
     plan = dict(date=date, state=state, expo=expo, hedge=hedge, p=p, horizon=cfg.horizon, spot=spot, vix=v,
                 ema50=float(ema50[t]), ma200=float(ma200[t]), etf=etf, strike=K, prem=float(prem),
-                lot=cfg.lot_size, dte=cfg.put_dte_buy, prev=prev, changed=bool(prev and prev != state),
+                lot=cfg.lot_size, dte=dte, expiry=exp.strftime("%d %b %Y"),
+                put_label=f"NIFTY {exp.strftime('%d %b %Y').upper()} {K} PE",
+                etf_limit=round(etf * 1.005, 2), etf_sell=round(etf * 0.995, 2), prev=prev, changed=bool(prev and prev != state),
                 spike=bool(abs(ret1) > 0.03 or vix1 > 0.20))
     (out / "index.html").write_text(PAGE.replace("__PLAN__", json.dumps(plan)).replace("__HIST__", json.dumps(hist[-15:])))
 
