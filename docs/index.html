@@ -13,6 +13,10 @@ main{max-width:720px;margin:0 auto;padding:22px 16px 48px}h1{font-size:24px;marg
 table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:14.5px}
 td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}th{color:var(--mute);font-weight:600}
 input{width:100%;max-width:260px;padding:9px;font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px}
+.pos{color:var(--bull)}.neg{color:var(--bear)}
+button{margin:10px 8px 0 0;padding:9px 14px;font-weight:600;font-size:15px;font-family:inherit;color:var(--bg);background:var(--acc);border:0;border-radius:6px;cursor:pointer}
+button.sec{background:transparent;color:var(--ink);border:1px solid var(--line)}
+button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .warn{margin-top:10px;padding:9px 12px;border:1px solid var(--neu);border-radius:8px;font-size:14px}
 </style></head><body><main>
 <h1>Nifty 50 daily plan</h1>
@@ -29,6 +33,9 @@ input{width:100%;max-width:260px;padding:9px;font:inherit;color:var(--ink);backg
 <div id="orders" class="wrap" style="margin-top:10px"></div>
 </div>
 
+<h2>Paper trading (practice, no real money)</h2>
+<div class="card wrap" id="paper"></div>
+
 <h2>Last 15 days</h2><div class="card wrap" id="hist"></div>
 
 <h2>Rules</h2>
@@ -40,7 +47,7 @@ input{width:100%;max-width:260px;padding:9px;font:inherit;color:var(--ink);backg
 <p class="note"><a href="backtest.txt">Latest backtest results</a> (if available)</p></div>
 </main>
 <script>
-const P={"date": "2026-10-09", "state": "NEUTRAL", "expo": 0.5, "hedge": 1.0, "p": 0.563694533255664, "horizon": 10, "spot": 22520.44921875, "vix": 14.380000114440918, "ema50": 23431.104762514762, "ma200": 24271.2415234375, "etf": 253.75999450683594, "strike": 21400, "prem": 89.56832658544454, "lot": 65, "dte": 45, "expiry": "24 Nov 2026", "put_label": "NIFTY 24 NOV 2026 21400 PE", "etf_limit": 255.03, "etf_sell": 252.49, "prev": null, "changed": false, "spike": false}, H=[{"date": "2026-10-09", "state": "NEUTRAL", "p": 0.564, "spot": 22520.44921875, "vix": 14.380000114440918}];
+const P={"date": "2026-10-09", "state": "NEUTRAL", "expo": 0.5, "hedge": 1.0, "p": 0.563694533255664, "horizon": 10, "spot": 22520.44921875, "vix": 14.380000114440918, "ema50": 23431.104762514762, "ma200": 24271.2415234375, "etf": 253.75999450683594, "strike": 21400, "prem": 89.56832658544454, "lot": 65, "dte": 45, "expiry": "24 Nov 2026", "expiry_iso": "2026-11-24", "put_label": "NIFTY 24 NOV 2026 21400 PE", "etf_limit": 255.03, "etf_sell": 252.49, "prev": null, "changed": false, "spike": false}, H=[{"date": "2026-10-09", "state": "NEUTRAL", "p": 0.564, "spot": 22520.44921875, "vix": 14.380000114440918}];
 const inr=x=>"₹"+Math.round(x).toLocaleString("en-IN"), $=id=>document.getElementById(id);
 const col={BULL:"var(--bull)",NEUTRAL:"var(--neu)",BEAR:"var(--bear)"}[P.state]||"var(--acc)";
 $("asof").textContent="Based on the close of "+P.date+".";
@@ -48,7 +55,7 @@ $("verdict").style.setProperty("--c",col);
 $("verdict").innerHTML=`<div class="big">${P.state}: ${Math.round(P.expo*100)}% in Nifty ETF, ${Math.round(P.hedge*100)}% of it insured</div>
 <p style="margin:6px 0 0">AI chance of Nifty being higher in ${P.horizon} trading days: <b>${(P.p*100).toFixed(0)}%</b>.${P.changed?" <b>Changed from "+P.prev+".</b>":""}</p>
 ${P.spike?'<div class="warn">Big market move today. Review before trading.</div>':""}`;
-$("nums").innerHTML=`<table><tr><td>Nifty 50</td><td>${P.spot.toLocaleString("en-IN")}</td></tr>
+$("nums").innerHTML=`<table><tr><td>Nifty 50</td><td>${Math.round(P.spot).toLocaleString("en-IN")}</td></tr>
 <tr><td>India VIX</td><td>${P.vix.toFixed(1)}</td></tr><tr><td>Trend weak below (50-day EMA)</td><td>${Math.round(P.ema50).toLocaleString("en-IN")}</td></tr>
 <tr><td>Danger zone below (200-day avg)</td><td>${Math.round(P.ma200).toLocaleString("en-IN")}</td></tr></table>`;
 $("hist").innerHTML="<table><tr><th>Date</th><th>State</th><th>AI chance</th><th>Nifty</th><th>VIX</th></tr>"+
@@ -73,10 +80,81 @@ function orders(){
          <tr><td>What the hedge does</td><td>If Nifty falls below <b>${P.strike.toLocaleString("en-IN")}</b> (${((1-P.strike/P.spot)*100).toFixed(1)}% under today's ${Math.round(P.spot).toLocaleString("en-IN")}), the put gains and offsets the insured part of your loss. ${Math.round(P.hedge*100)}% of your ETF is insured.</td></tr>`;
     }
   }
-  t+=`<tr><td>Watch levels</td><td>Nifty closing under <b>${f(P.ema50)}</b> means the trend is weakening. Under <b>${f(P.ma200)}</b> is the danger zone. The next daily plan will tell you whether to cut.</td></tr></table>`;
+  t+=`<tr><td>Watch levels</td><td>${P.spot<P.ema50?`Nifty is <b>already below</b> its 50-day EMA (${f(P.ema50)}), so the trend is weak.`:`Nifty closing under <b>${f(P.ema50)}</b> (50-day EMA) means the trend is weakening.`} ${P.spot<P.ma200?`It is also <b>below</b> the 200-day average (${f(P.ma200)}): danger zone.`:`Under <b>${f(P.ma200)}</b> (200-day average) is the danger zone.`} The next daily plan will tell you whether to cut.</td></tr></table>`;
   if(trim)t+=`<div class="warn">Capital is too small for one Nifty put lot (about ${inr(P.lot*P.spot)}). The ETF amount was cut by about ${Math.round(25*P.hedge)}% instead of buying a put.</div>`;
   t+=`<p class="note">Compare with what you already hold and trade only the difference. Put expiry is the last Tuesday of the month; if that is a holiday, it moves to the day before. Confirm in your broker app.</p>`;
   $("orders").innerHTML=t;
 }
-$("cap").addEventListener("input",orders);orders();
+/* ---------- paper trading (virtual money, stored in this browser only) ---------- */
+const KEY="n50paper",RR=.065,FEE=.0007;
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-.284496736)*t+.254829592)*t*Math.exp(-x*x));}
+const NN=x=>.5*(1+erf(x/Math.SQRT2));
+function bsPut(S,K,T,sig){if(T<=0)return Math.max(K-S,0);const d1=(Math.log(S/K)+(RR+.5*sig*sig)*T)/(sig*Math.sqrt(T)),d2=d1-sig*Math.sqrt(T);return K*Math.exp(-RR*T)*NN(-d2)-S*NN(-d1);}
+const dteOf=iso=>Math.max(0,Math.round((new Date(iso)-new Date(P.date))/864e5));
+const putPx=p=>bsPut(P.spot,p.strike,dteOf(p.exp)/365,P.vix/100*1.1);
+const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||"null")}catch(e){return null}};
+const save=s=>{try{localStorage.setItem(KEY,JSON.stringify(s));return true}catch(e){return false}};
+const nav=s=>s.cash+s.units*P.etf+s.puts.reduce((a,p)=>a+p.lots*P.lot*putPx(p),0);
+let note="";
+function mark(s){const b=s.cap/s.startEtf*P.etf;s.navs=s.navs.filter(n=>n.date!==P.date).concat([{date:P.date,nav:nav(s),bench:b}]).slice(-400);}
+function start(){
+  const cap=parseFloat($("cap").value);
+  if(!(cap>0)){note="Enter your capital in the box above first.";return renderPaper();}
+  const s={start:P.date,cap,cash:cap,units:0,puts:[],trades:[],navs:[],startEtf:P.etf,last:null};
+  mark(s);save(s);note="";renderPaper();
+}
+function follow(){
+  const s=load();if(!s)return;
+  if(s.last===P.date){note="You already followed the plan for "+P.date+".";return renderPaper();}
+  const log=t=>s.trades.push({date:P.date,t});
+  let tu=Math.floor(nav(s)*P.expo/P.etf),tl=0;
+  if(tu>0&&P.hedge>0){tl=Math.round(P.hedge*tu*P.etf/(P.lot*P.spot));if(tl===0)tu=Math.floor(tu*(1-.25*P.hedge));}
+  // 1. puts: close expired-soon or unwanted ones, trim extra lots
+  const keep=[];
+  for(const p of s.puts){
+    const px=putPx(p);
+    if(tl===0||dteOf(p.exp)<=10){s.cash+=p.lots*P.lot*px*.98;log("Sold "+p.lots+" lot(s) "+p.label+" at ₹"+(px*.98).toFixed(0));}
+    else keep.push(p);
+  }
+  let have=keep.reduce((a,p)=>a+p.lots,0);
+  while(have>tl&&keep.length){const p=keep[keep.length-1],n=Math.min(p.lots,have-tl);
+    s.cash+=n*P.lot*putPx(p)*.98;p.lots-=n;have-=n;log("Sold "+n+" lot(s) "+p.label);if(p.lots===0)keep.pop();}
+  s.puts=keep;
+  // 2. ETF sells
+  if(tu<s.units){const n=s.units-tu,pr=P.etf_sell;s.cash+=n*pr*(1-FEE);s.units=tu;log("Sold "+n+" NIFTYBEES at ₹"+pr);}
+  // 3. put buy
+  if(tl>have){
+    const c1=P.lot*P.prem*1.02,n=Math.min(tl-have,Math.floor(s.cash/c1));
+    if(n>0){s.cash-=n*c1;s.puts.push({label:P.put_label,strike:P.strike,exp:P.expiry_iso,lots:n,lot:P.lot});log("Bought "+n+" lot(s) "+P.put_label+" at ₹"+(P.prem*1.02).toFixed(0));}
+    else log("Could not afford the put (not enough virtual cash).");
+  }
+  // 4. ETF buys
+  if(tu>s.units){const pr=P.etf_limit,n=Math.min(tu-s.units,Math.floor(s.cash/(pr*(1+FEE))));
+    if(n>0){s.cash-=n*pr*(1+FEE);s.units+=n;log("Bought "+n+" NIFTYBEES at ₹"+pr);}}
+  if(!s.trades.some(t=>t.date===P.date))log("No trade needed: you already match the plan.");
+  s.last=P.date;mark(s);
+  note=save(s)?"Done. Virtual orders recorded at the plan's limit prices.":"Could not save: your browser blocks storage.";
+  renderPaper();
+}
+function renderPaper(){
+  const s=load(),el=$("paper"),nt=note?`<p class="note">${note}</p>`:"";
+  if(!s){el.innerHTML=`<p style="margin-top:0">Practice with virtual money. Type a virtual capital in the box above, start an account, then press "Follow today's plan" each day you open this page. After a few weeks you can see how the plan would have done, with no real risk.</p><button data-a="start">Start paper account</button>`+nt;return;}
+  mark(s);save(s);
+  const v=nav(s),pl=v-s.cap,b=s.cap/s.startEtf*P.etf,bl=b-s.cap,cl=x=>x>=0?"pos":"neg",sg=x=>(x>=0?"+":"-")+inr(Math.abs(x));
+  let t=`<table><tr><td>Started</td><td>${s.start} with ${inr(s.cap)}</td></tr>
+  <tr><td>Value today</td><td><b>${inr(v)}</b></td></tr>
+  <tr><td>Profit / loss</td><td class="${cl(pl)}"><b>${sg(pl)} (${(pl/s.cap*100).toFixed(1)}%)</b></td></tr>
+  <tr><td>If you had just bought NIFTYBEES on day 1</td><td class="${cl(bl)}">${sg(bl)} (${(bl/s.cap*100).toFixed(1)}%)</td></tr>
+  <tr><td>Holding</td><td>${s.units.toLocaleString("en-IN")} NIFTYBEES, cash ${inr(s.cash)}`+
+  s.puts.map(p=>`<br>${p.lots} lot(s) ${p.label}: worth about ${inr(p.lots*P.lot*putPx(p))} now`).join("")+`</td></tr></table>`;
+  t+=`<button data-a="follow">Follow today's plan (${P.date})</button><button class="sec" data-a="reset">Reset</button>`+nt;
+  const tr=s.trades.slice(-8).reverse();
+  if(tr.length)t+=`<p style="margin:14px 0 4px"><b>Recent virtual trades</b></p><table>`+tr.map(x=>`<tr><td>${x.date}</td><td>${x.t}</td></tr>`).join("")+`</table>`;
+  t+=`<p class="note">Virtual trades use the limit prices shown above and a model price for puts, so real results will differ. Brokerage and tax are only roughly counted. Data stays in this browser only.</p>`;
+  el.innerHTML=t;
+}
+$("paper").addEventListener("click",e=>{const a=e.target&&e.target.dataset?e.target.dataset.a:"";
+  if(a==="start")start();else if(a==="follow")follow();
+  else if(a==="reset"&&confirm("Delete your paper account and start over?")){try{localStorage.removeItem(KEY)}catch(x){}note="";renderPaper();}});
+$("cap").addEventListener("input",orders);orders();renderPaper();
 </script></body></html>
